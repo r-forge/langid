@@ -1,0 +1,323 @@
+%\VignetteIndexEntry{langid manual}
+
+%Achtung: nachdem Geseaved wurde, muss man den ersten Block "library(langid)" so umschreiben,
+%dass er richtig dargestellt wird!
+%Achtung: in den ganzen system.file gehört "langid" statt "tm" 
+%Achtung: folgender Teil muss dann geändert werden: #data("profX") profX<-profXcompl
+
+
+   
+\documentclass[11pt,a4paper]{article} %stef
+
+\usepackage[round]{natbib}
+
+\usepackage{Sweave}
+
+\usepackage[ansinew]{inputenc}
+\usepackage{latexsym,alltt,graphicx,textcomp,hyperref}
+\usepackage{amsfonts}
+\usepackage{color}
+\usepackage{colortbl}
+\usepackage{lscape}
+\usepackage{listings}
+
+%hier werden Farben definiert
+\definecolor{blau}{rgb}{0.690,0.886,1.000}
+\definecolor{grun}{rgb}{0.153,0.870,0.117}
+\definecolor{grau}{rgb}{0.780,0.780,0.780}
+\definecolor{rot} {rgb}{0.965,0.235,0.000}
+\definecolor{hellgrau}{gray}{0.6}
+
+%hier werden neue Fonts definiert
+\newcommand{\pkg}[1]{{\normalfont\fontseries{b}\selectfont #1}} %für pkg - referenz	
+\newcommand{\code}[1]{\textsf{#1}} %für r-code
+\newcommand{\vars}[1]{\textit{#1}} %für die variablen
+\newcommand{\foo}[1]{{\normalfont\fontseries{bx}\fontshape{it}\selectfont #1}} %für Funktionenbezeichnung
+
+%Alle Einstellungen fürs codepackage 'listings':
+\lstset{basicstyle=\small, commentstyle = \color{hellgrau},breaklines=true,keywordstyle=\bf}
+\lstset{language=R}
+
+\begin{document} 
+
+
+\author{Johannes Rauch}
+
+
+\begin{center}
+{\LARGE Language Identification of Written Text:} \\
+\vspace*{.2cm}
+{\LARGE The R Package \pkg{langid}}\\
+\vspace*{.5cm}
+{\large Johannes Rauch}\\
+\end{center}
+\vspace*{1cm}
+\begin{abstract}
+This vignette gives a short overview over available features in the \pkg{langid} package for $n$-gram-based language detection purposes in R.
+\end{abstract}
+
+
+%####################################################################
+
+
+\section*{Loading the package}
+First, we need to load the package:
+\begin{Schunk}
+\begin{Sinput}
+> options(width = 42)
+> library("langid")
+\end{Sinput}
+\end{Schunk}
+Since \pkg{langid} heavily relies on \pkg{tm} \citep{tm}, this package must also be installed.
+
+%####################################################################
+
+\section*{Data Import}
+Two different types of data are required for running \pkg{langid}: text documents and language-profiles.
+All text documents will have to be made available in the form of a \vars{corpus}---a collection of text documents generated using \pkg{tm}. In the following examples, we will generate a \vars{corpus} from three english .txt-files in the two most typical ways\footnote{For detailed information on how to generate a \vars{corpus} see
+\citet{tmmanual}}:
+
+First, we consider the case, where all .txt-files are saved in one file:
+\begin{Schunk}
+\begin{Sinput}
+> options(width = 42)
+> tdAdr <- system.file("traindata", 
++     "tdeng", package = "langid")
+> (icorpus <- Corpus(DirSource(tdAdr), 
++     readerControl = list(reader = readPlain)))
+\end{Sinput}
+\begin{Soutput}
+A text document collection with 3 text documents
+\end{Soutput}
+\end{Schunk}
+
+Next, we want to create a corpus from elements of a vector:
+
+\begin{Schunk}
+\begin{Sinput}
+> (icorpus2 <- Corpus(VectorSource(letters)))
+\end{Sinput}
+\begin{Soutput}
+A text document collection with 26 text documents
+\end{Soutput}
+\end{Schunk}
+              
+All text which is to be used either to train language models or for classification, must be encoded in UTF-8. If this is not guarateed, the algorithm will inevitably produce errors.
+
+The second type of data used is a matrix with language-profiles. Usually such a matrix must first be generated. Once this tedious process is completed, the profiles should be saved and thereafter loaded, whenever needed.
+
+%####################################################################
+
+\section*{Generating Language-Profiles}
+To identify a language, first a document-profile must be generated. It depicts certain criteria of the text which is to be classified. In a second step, this document-profile is compared to different language-profiles. The best fit is understood to identify the language. The algorithm in \pkg{langid} takes \emph{$n$-grams} as the criteria. $n$-grams are substrings of a longer string with length \vars{n}. For example, take the word `manual'. In a first step, the word is padded with blanks\footnote{Represented trough underscores.} to become `\_ manual \_ \_ \_ \_'. Then the $n$-grams are generated, \vars{n} varying from 1 to 5. Of all the possible $n$-grams, only certain ones will be used further on. Table \ref{tbl: ngs} shows the result---the $n$-grams in grey fields will be deleted.
+
+\begin{table}
+\footnotesize
+	\centering
+		\caption{n-grams of the word "`manual"'}
+		\label{tbl: ngs}
+			\begin{tabular}{|l|l|l|l|l|}
+
+				\hline
+				{\bf n=1} &  {\bf n=2} &  {\bf n=3} &  {\bf n=4} &  {\bf n=5} \\
+				\hline
+         \cellcolor{hellgrau}\_ &  \_m & \_ma & \_man & \_manu \\
+         \cellcolor{hellgrau}m & \cellcolor{hellgrau}ma & \cellcolor{hellgrau}man & \cellcolor{hellgrau}manu &\cellcolor{hellgrau}manua\\
+         a & an & anu & anua & \cellcolor{hellgrau}anual \\
+         n & nu & nua & \cellcolor{hellgrau}nual& nual\_ \\
+         u & ua & \cellcolor{hellgrau}ual & ual\_ & \cellcolor{hellgrau}ual\_ \_ \\
+         a & \cellcolor{hellgrau}al & al \_ & \cellcolor{hellgrau}al\_ \_ & \cellcolor{hellgrau}al\_ \_ \_  \\
+         \cellcolor{hellgrau}l & l\_ & \cellcolor{hellgrau}l\_ \_ & \cellcolor{hellgrau}l\_ \_ \_  & \cellcolor{hellgrau}l\_ \_ \_ \_ \\
+				\hline				
+			\end{tabular}
+\end{table}
+The result can be obtained through:
+\begin{Schunk}
+\begin{Sinput}
+> (generate_ngrams(x = "corpus", splits = 5))
+\end{Sinput}
+\begin{Soutput}
+ [1] "o"     "r"     "p"     "u"    
+ [5] " c"    "or"    "rp"    "pu"   
+ [9] "s "    " co"   "orp"   "rpu"  
+[13] "us "   " cor"  "orpu"  "pus " 
+[17] " corp" "orpus" "rpus "
+\end{Soutput}
+\end{Schunk}
+Where \vars{x} is the word from which the $n$-grams are to be generated and \vars{splits} is the upper boundary of the range of \vars{n}. Once, $n$-grams have been generated from many words, a frequency table can be used to obtain a $n$-gram-distribution of the text. This reveals, which $n$-grams occur often and which ones appear only rarely. Taking into consideration, that each language has a very characteristic $n$-gram-profile, the distribution of the $n$-grams from the text can be compared with those of different languages to measure, which fits best. 
+
+To train a language-model, a certain amount of training data will have to be supplied. Composing it can be a very time consuming and tedious process, which has to be conducted with greatest care, as the quality of the training data will highly influence the quality of the results\footnote{For detailed information on how to build text-corpora see for example \citet{ahds}}. As an example, we use training data that consits of three pages of englisch text\footnote{Both, the english and the german trainingdata are composed of juridical text, newspaper articles and a novel---one page each.} which allready has been read in as \vars{icorpus} (initial corpus) to generate the english-language-profile:
+\begin{Schunk}
+\begin{Sinput}
+> profX <- make_profX(icorpus, div = 0.5, 
++     profX = "new", profXlen = 1000, 
++     splits = 5, langcode = "eng")
+\end{Sinput}
+\end{Schunk}
+The arguments stand for:
+\begin{description}
+	\item[icorpus] the name of the corpus with the trainingdata for one language, generated using \pkg{tm}.
+	\item[div] specifies how many percent of the most frequent $n$-grams generated from each of the documents within the corpus, should be included in the language-profile. The reason for this is, that an extremely high number of $n$-grams (up to 50\%) occure only once or twice. So they are not significant and hence can be deleted. 	
+	\item[profX] if a new language profile should be created \vars{profX} should be set to \vars{"new"}. If an existing profile language matrix should be augmented by a new language, \vars{profX} should be given the name of this existing \vars{profX}.
+	\item[profXlen] only the top \vars{profXlen} $n$-grams of all the trainingdate in \vars{icorpus} will be included in the \vars{profX}.The significance of a $n$-gram decreases with its rank. Hence, a language-profile will only need to include a small number of the most frequent $n$-grams---for example the top 1000. This value should be the same across all language-profiles within one \vars{profX}
+	\item[splits] the upper boundary of the range of \vars{n}
+	\item[langcode] the ISO 639-3-code of the language for which the profile is being generated\footnote{See http://www.sil.org/ISO639-3/codes.asp for all the codes.}.
+\end{description} 	
+One only can identify languages, for which a language-profile exists. As an example, we will continue by augmenting the \vars{profX} by another language: german. The procedure is the same as before:
+\begin{Schunk}
+\begin{Sinput}
+> tdAdr <- system.file("traindata", 
++     "tdger", package = "langid")
+> (icorp <- Corpus(DirSource(tdAdr), 
++     readerControl = list(reader = readPlain)))
+\end{Sinput}
+\begin{Soutput}
+A text document collection with 3 text documents
+\end{Soutput}
+\end{Schunk}
+\begin{Schunk}
+\begin{Sinput}
+> profX <- make_profX(icorpus, div = 0.5, 
++     profX = profX, profXlen = 1000, 
++     splits = 5, langcode = "ger")
+\end{Sinput}
+\end{Schunk}
+The result is a $2 \times 1695$ matrix. Each line represents one language, each column one $n$-gram. The values reveal, how often a specific $n$-gram has been counted in the trainingdata---if it did belong to the top 1000. This process should be repeated for all the languages required.
+
+\subsection*{The 26-Language profX}
+A \vars{profX} with 26 language-profiles has been trained and can be loaded via:
+\begin{Schunk}
+\begin{Sinput}
+%> profX <- profXcompl
+> data(profX)
+> dim(profX)
+\end{Sinput}
+\begin{Soutput}
+[1]	26 11022
+\end{Soutput}
+\end{Schunk}
+The training-data stems from the \citet{eci}, \citet{gutenberg} and private sources. Table \ref{tbl: langdets} gives an overview over some characteristica of this language-profiles-collection. If a language belongs to the ISO 639-3 makro-languages set\footnote{See \citet{silwebmacro} for more information on macro-languages.}, its name is given in the third column. The total number of words used to train each language profile is displayed in the last column.
+
+\begin{table}[ht]
+	\centering
+		\caption{Language Profiles}
+		\label{tbl: langdets}
+			\begin{tabular}{|c|c|c|c|c|}
+				\hline
+   \textbf{language} &\multicolumn{2}{c|}{\textbf{ISO 639-3}} &\textbf{cyrillic} &\textbf{Words}\\
+				\cline{2-3}
+				&\textbf{language}&\textbf{macro}&&\\
+				\hline
+ Albanian & 				alb &		&            &      54202 \\
+  Bosnian &        bos &hbs&            &       8578 \\
+Bulgarian &        bul &		& \checkmark &      58058 \\
+   Danish &        dan &		&            &      52130 \\
+   German &        ger &		&            &      67475 \\
+  English &        eng &		&            &      55916 \\
+  Finish &				fin	&		&						 &			35859 \\
+French &       fre &		&            &      80609 \\
+Greek &        gre &		&            &      48274 \\
+Italian &       ita &		&            &      43970 \\
+ Croatian &        cro &hbs&            &      49664 \\
+    Latin &        lat &		&            &      38540 \\
+Dutch &    dut &		&            &      50427 \\
+Norwegian &        nor &		&            &      35275 \\
+  Polish &        pol &		&            &      50954 \\
+Portuguese &     por &		&            &      46804 \\
+ Romanian &        rum &		&            &      54694 \\
+  Russian &        rus &		& \checkmark &      45113 \\
+Swedish &        swe &		&            &      50351 \\
+  Serbian &        scc &hbs& \checkmark &      37027 \\
+  Serbian &        scc &hbs&            &      42514 \\
+Slovak &        slo &		&            &      56647 \\
+Slovenian &        slv &		&            &      69826 \\
+  Spanish &        spa &		&            &      53690 \\
+Czech &       cze &		&            &      25727 \\
+ Hungarian &        hun &		&            &      38992 \\
+				\hline
+			\end{tabular}
+\end{table}   
+Although it might prove useful for rather general purposes, specialised tasks will require language-profiles that are generated from tailor-made training-data.   
+
+%####################################################################
+
+\section*{Language Identification}
+In the preceding chapter it was explained, how language profiles can be trained and combined in one single matrix. Now it shall be explained, how this \vars{profX} can be used to identify the language of text documents. 
+First, one should generate or load the \vars{profX}---just, what we have done above. The next step is, to generate a corpus with all the text documents which should be classified. As an example, ten documents are provided---5 are written in english, five in german. 
+\begin{Schunk}
+\begin{Sinput}
+> tdAdr <- system.file("testdata", 
++     "td1", package = "langid")
+> (icorpus <- Corpus(DirSource(tdAdr), 
++     readerControl = list(reader = readPlain)))
+\end{Sinput}
+\begin{Soutput}
+A text document collection with 10 text documents
+\end{Soutput}
+\end{Schunk}
+Now we will identify the language of each document:
+\begin{Schunk}
+\begin{Sinput}
+> (lang_ids <- check_langs(icorpus, 
++     profX = profX, omw = 20, numw = 100, 
++     numng = 100, splits = 5, method = "re"))
+\end{Sinput}
+\begin{Soutput}
+ [1] "eng" "eng" "eng" "eng" "eng" "ger"
+ [7] "ger" "ger" "ger" "ger"
+\end{Soutput}
+\end{Schunk}
+The arguments stand for:
+\begin{description}
+	\item[icorpus] the name of the corpus with the text documents to be tested, generated using \pkg{tm}.
+	\item[profX] the name of the language profile matrix, generated using \vars{make\_profX}.
+	\item[omw] number of words to be ommited at the beginning of the text document.
+	\item[numw] number of words to be used for identifying a  document's language.
+	\item[numng] number of the most frequent $n$-grams that are to be used for building the $n$-gram distribution of the text document.
+	\item[splits] the upper boundary of the range of \vars{n}
+	\item[method] method used for testing document profile against language profiles---can be \vars{"re"},\vars{"mce"} or a customized function.
+\end{description} 
+
+Only the amount of \vars{numw} words is being used for each document to identify its language. They are cut out of the text as a block, starting with the word at position \vars{omw} $+ 1$ . This gives the opportunity to skip abstracts or other features of a document, which might not be best suited for identifying the language. From those selected words, $n$-grams will be generated. Of those $n$-grams, only the top \vars{numng} $n$-grams will be used for building the frequency distribution needed for language identification.
+
+The result is the vector \vars{lang\_ids}. He contains the ISO 639-3-codes of the identified languages\footnote{Two special ISO 639-2-codes might show up as well: "zxx" means, the text-document is either empty or the text is not suitable for language identification. "und" means the result is ambiguous---more than one language have been identified.} 
+
+%####################################################################
+
+\section*{Comparing the Distributions}
+There are many ways to compare one distribution to another one, in order to determine, which one fits best. Two methods have allready been implemented: relative entropy("`re"') and mutual cross entropy ("`mce"'). If necessary, different measures can be implemented as well. We will use the function \foo{fun\_re} as an example. Relative entropie is defined as:
+\begin{equation} I(p;q) = \sum_{i=1}^{n} p_{i} \log \left( {p_{i} \over q_{i}} \right) \end{equation}
+The implemented function looks as follows:
+\begin{Schunk}
+\begin{Sinput}
+> fun_re <- function(langsubset, docprof) {
++     langsubset[which(langsubset == 
++         0)] <- 1e-06
++     matchres <- apply(langsubset, 
++         1, function(x, y = docprof) {
++             sum(y * log2(y/x))
++         })
++     lang <- rownames(langsubset)[which(matchres == 
++         min(matchres))]
++     if (length(lang) > 1) 
++         lang <- "und"
++     lang
++ }
+\end{Sinput}
+\end{Schunk}
+The function requires two arguments:
+\begin{description}
+	\item[docprof] the frequency distribution of the document's $n$-grams---$p_{i}$.
+	\item[langsubset] the frequency distribution of the same $n$-grams as in \vars{docprof} within the language-profiles. This is a matrix with one line for each language and one column for each of the $n$-grams---$q_{i}$.
+\end{description}
+The function must return the argument \vars{lang} wich is either the ISO 639-3-code of the identified language or the ISO 639-2-code "und".
+
+
+
+
+
+
+\bibliographystyle{plainnat}
+\bibliography{manualrefs}
+
+\end{document}

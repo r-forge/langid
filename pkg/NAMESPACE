@@ -1,0 +1,6 @@
+import(methods)
+import(tm)
+
+export(generate_ngrams)
+export(check_langs)
+export(make_profX)

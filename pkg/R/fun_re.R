@@ -1,0 +1,9 @@
+`fun_re` <-
+function(langsubset,docprof){
+  langsubset[which(langsubset==0)]<-0.000001
+  matchres<-apply(langsubset,1,function(x,y=docprof){sum(y*log2(y/x))})
+  lang<-rownames(langsubset)[which(matchres==min(matchres))] #take language which fits best
+  if(length(lang)>1) lang<-"und" #if 1< languages have a minimum value
+lang
+}
+
